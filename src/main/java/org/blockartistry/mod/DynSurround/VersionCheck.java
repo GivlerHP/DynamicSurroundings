@@ -77,47 +77,64 @@ public final class VersionCheck implements Runnable {
 			this.isBeta = false;
 		}
 
-		public SoftwareVersion(String versionString) {
+        public SoftwareVersion(String versionString) {
 
-			// Old git tags start with v
-			if (versionString.charAt(0) == 'v') {
-				versionString = versionString.substring(1);
-			}
-            // Dirty builds = git changes since last git tag
-            versionString = StringUtils.remove(versionString,".dirty");
+            if (StringUtils.isBlank(versionString)) {
+                this.major = 0;
+                this.minor = 0;
+                this.revision = 0;
+                this.patch = 0;
+                this.isAlpha = false;
+                this.isBeta = false;
+                return;
+            }
 
-            assert versionString.length() > 0;
+            versionString = versionString.trim();
 
-			this.isAlpha = StringUtils.containsIgnoreCase(versionString, "ALPHA");
-			if (this.isAlpha)
-				versionString = StringUtils.remove(versionString, "ALPHA");
+            // Old git tags start with v
+            if (versionString.startsWith("v")) {
+                versionString = versionString.substring(1);
+            }
 
-			this.isBeta = StringUtils.containsIgnoreCase(versionString, "BETA");
-			if (this.isBeta)
-				versionString = StringUtils.remove(versionString, "BETA");
+            // Dirty builds = uncommitted git changes
+            versionString = StringUtils.remove(versionString, ".dirty");
+            versionString = StringUtils.remove(versionString, "-dirty");
 
-			final String[] parts = StringUtils.split(versionString, ".");
-			final int numComponents = parts.length;
+            this.isAlpha = StringUtils.containsIgnoreCase(versionString, "ALPHA");
+            this.isBeta = StringUtils.containsIgnoreCase(versionString, "BETA");
 
-			assert numComponents >= 3;
-			this.major = Integer.parseInt(parts[0]);
-			this.minor = Integer.parseInt(parts[1]);
-			this.revision = Integer.parseInt(parts[2]);
-			if (numComponents == 4) {
-                // Take the first digits from the match as this section can also include some numbers due to old git tags
-                // For instance: 12TEST1-41-g10064b2 is an option
-                Pattern pattern = Pattern.compile("\\d+");
-                Matcher matcher = pattern.matcher(parts[3]);
-                if (matcher.find()) {
-                    String matches = matcher.group(0);
-                    this.patch = Integer.parseInt(matches);
-                    return;
-                }
+            versionString = versionString.replaceAll("(?i)ALPHA", "");
+            versionString = versionString.replaceAll("(?i)BETA", "");
 
-			}
-            this.patch = 0;
-		}
+            /*
+             * Accept versions such as:
+             * 1.2.3
+             * 1.2.3.4
+             * v1.2.3
+             * 1.2.3-41-g10064b2
+             *
+             * Git-generated development versions without a numeric version,
+             * such as a0adc40-master+a0adc40aaf-dirty, become 0.0.0.
+             */
+            final Matcher matcher = Pattern.compile(
+                "^(\\d+)\\.(\\d+)\\.(\\d+)(?:\\.(\\d+))?"
+            ).matcher(versionString);
 
+            if (!matcher.find()) {
+                this.major = 0;
+                this.minor = 0;
+                this.revision = 0;
+                this.patch = 0;
+                return;
+            }
+
+            this.major = Integer.parseInt(matcher.group(1));
+            this.minor = Integer.parseInt(matcher.group(2));
+            this.revision = Integer.parseInt(matcher.group(3));
+            this.patch = matcher.group(4) != null
+                ? Integer.parseInt(matcher.group(4))
+                : 0;
+        }
 		@Override
 		public String toString() {
 			final StringBuilder builder = new StringBuilder();

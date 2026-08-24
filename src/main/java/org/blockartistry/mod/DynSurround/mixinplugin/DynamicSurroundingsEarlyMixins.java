@@ -45,6 +45,8 @@ public class DynamicSurroundingsEarlyMixins implements IFMLLoadingPlugin, IEarly
                 mixins.add("MixinEntityRenderer");
             }
             mixins.add("MixinSoundManager");
+            mixins.add("MixinMusicTicker");
+            mixins.add("MixinMusicType");
             //Sound engine crash patches
             mixins.add("MixinPaulsCodeSource");
             mixins.add("MixinPaulsCodeSoundLibrary");

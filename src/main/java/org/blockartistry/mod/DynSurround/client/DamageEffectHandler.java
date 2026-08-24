@@ -24,6 +24,9 @@
 
 package org.blockartistry.mod.DynSurround.client;
 
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.UUID;
 
 import org.blockartistry.mod.DynSurround.ModOptions;
@@ -35,6 +38,9 @@ import org.blockartistry.mod.DynSurround.network.Network;
 
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.common.gameevent.TickEvent;
+import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.client.Minecraft;
@@ -56,6 +62,19 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 public final class DamageEffectHandler {
 
 	private static final double DISTANCE_THRESHOLD_SQ = 32 * 32;
+	private static final Map<UUID, PendingDamage> PENDING_DAMAGE = new HashMap<>();
+
+	private static final class PendingDamage {
+		private final EntityLivingBase entity;
+		private final float healthBefore;
+		private boolean isCritical;
+
+		private PendingDamage(final EntityLivingBase entity, final boolean isCritical) {
+			this.entity = entity;
+			this.healthBefore = entity.getHealth();
+			this.isCritical = isCritical;
+		}
+	}
 
 	public static class HealthData {
 		public final UUID entityId;
@@ -89,8 +108,11 @@ public final class DamageEffectHandler {
 	}
 
 	public static void initialize() {
-		if (ModOptions.enableDamagePopoffs)
-			MinecraftForge.EVENT_BUS.register(new DamageEffectHandler());
+		if (ModOptions.enableDamagePopoffs) {
+			final DamageEffectHandler handler = new DamageEffectHandler();
+			MinecraftForge.EVENT_BUS.register(handler);
+			FMLCommonHandler.instance().bus().register(handler);
+		}
 	}
 
 	// From the Minecraft code for damage
@@ -123,8 +145,40 @@ public final class DamageEffectHandler {
 			}
 		}
 
-		final HealthData data = new HealthData(event.entityLiving, isCrit, (int) event.ammount);
-		Network.sendHealthUpdate(data, event.entity.worldObj.provider.dimensionId);
+		final UUID entityId = event.entityLiving.getUniqueID();
+		final PendingDamage pending = PENDING_DAMAGE.get(entityId);
+		if (pending == null) {
+			PENDING_DAMAGE.put(entityId, new PendingDamage(event.entityLiving, isCrit));
+		} else {
+			pending.isCritical |= isCrit;
+		}
+	}
+
+	/**
+	 * LivingHurtEvent fires before Minecraft applies every armour, potion, and
+	 * mod-specific reduction. Delay the popup until the end of the world tick
+	 * and derive it from the entity's actual health loss instead.
+	 */
+	@SubscribeEvent
+	public void onWorldTick(final TickEvent.WorldTickEvent event) {
+		if (event.phase != Phase.END || event.world == null || event.world.isRemote)
+			return;
+
+		final Iterator<PendingDamage> iterator = PENDING_DAMAGE.values().iterator();
+		while (iterator.hasNext()) {
+			final PendingDamage pending = iterator.next();
+			if (pending.entity.worldObj != event.world)
+				continue;
+
+			iterator.remove();
+			final float actualDamage = pending.healthBefore - Math.max(0.0F, pending.entity.getHealth());
+			if (actualDamage <= 0.0F)
+				continue;
+
+			final HealthData data = new HealthData(pending.entity, pending.isCritical, (int) actualDamage);
+			if (data.amount > 0)
+				Network.sendHealthUpdate(data, event.world.provider.dimensionId);
+		}
 	}
 
 	@SubscribeEvent(priority = EventPriority.LOW)

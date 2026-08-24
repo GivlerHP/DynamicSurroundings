@@ -71,6 +71,7 @@ public class ClientEffectHandler {
 		register(new BiomeSurveyHandler());
 		register(new FogEffectHandler());
 		register(new BlockEffectHandler());
+		CreditsMusicHandler.initialize();
 
 		if (ModOptions.blockedSounds.length > 0 || ModOptions.culledSounds.length > 0)
 			register(new SoundBlockHandler());

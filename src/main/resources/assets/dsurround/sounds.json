@@ -817,6 +817,15 @@
 			}
 		]
 	},
+	"music.theend": {
+		"category": "music",
+		"sounds": [
+			{
+				"name": "dsurround:music/theend",
+				"stream": true
+			}
+		]
+	},
 	"bird": {
 		"category": "ambient",
 		"sounds": [
