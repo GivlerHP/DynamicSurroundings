@@ -77,6 +77,14 @@ public final class CommandRain extends CommandBase {
 		return "/rain <status | reset | reload | 1-100 | <<setmax|setmin> 0-100>";
 	}
 
+    @Override
+    public List<String> addTabCompletionOptions(ICommandSender sender, String[] args) {
+        if(args.length==1)return getListOfStringsMatchingLastWord(args,"status","reset","reload","setmin","setmax","0","25","50","75","100");
+        if(args.length==2 && ("setmin".equalsIgnoreCase(args[0])||"setmax".equalsIgnoreCase(args[0])))
+            return getListOfStringsMatchingLastWord(args,"0","25","50","75","100");
+        return null;
+    }
+
 	@Override
 	public void processCommand(final ICommandSender sender, final String[] parms) {
 
